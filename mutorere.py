@@ -1,24 +1,27 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import collections
 
 class gameManager :
 
-
+    # Initialisation
     def __init__(self):
         self.board = ["black","black","black","black","white","white","white","white","empty"]
-        #self.board = ["black","black","empty","black","white","white","white","white","black"]
         self.round = "black"
         self.possibleActions = [0,1,2,3,4,5,6,7,8]
         self.terminated = False
 
+    # Faire un déplacement en parcourant les actions possibles, puis changer de joueur.
+    # Attribution des récompenses
     def step(self, action):
+        # Récompense négative si l'action passée en paramètre n'est pas possible
         reward = -10
         #test si l'action est possible
         self.possibleAction()
         for i in self.possibleActions:
             if(i==action):
-                reward = 0
-                # si action possible, on inverse la position du pion selectioné et du vide
+                reward = -1
+                # si action possible, on inverse la position du pion selectionné et du vide
                 empty = self.board.index("empty")
                 self.board[action]="empty"
                 self.board[empty] = self.round
@@ -27,7 +30,7 @@ class gameManager :
                 else :
                     self.round = "black"
 
-        #test if terminated
+        # Mise à jour des actions possibles et détermination si la partie est finie ou non
         self.possibleAction()
         if (self.possibleActions) == []:
             self.terminated = True
@@ -35,10 +38,6 @@ class gameManager :
 
         #return state,reward,done,info
         return self.board,reward,self.terminated,None
-
-
-
-
 
     def getPositionPayer(self,player):
         position=[]
@@ -79,6 +78,7 @@ class gameManager :
 
         self.possibleActions = possibleAction
 
+    # Fonction énumérant les actions possibles en fonction de la case vide
     def possibleAction(self):
         #millieu dispo
         if(self.board[8]=="empty"):
@@ -110,13 +110,12 @@ class gameManager :
                     possibleAction[8] = 1
             self.transformPossibleAction(possibleAction)
 
+    # choisis une action au hasard parmi celles possibles
     def actionSpaceSample(self):
-        #choisit une action au hasard parmi celles possibles
-        self.possibleAction()
-        if (self.possibleActions)==[]:
-            self.terminated = True
-            return
-        return np.random.choice(self.possibleActions)
+        #self.possibleAction()
+        possibleActions = [0,1,2,3,4,5,6,7,8]
+
+        return np.random.choice(possibleActions)
 
     def render(self):
         print('------------------------------------------')
@@ -130,6 +129,7 @@ class gameManager :
         print('            ' + self.board[6])
         print('------------------------------------------')
 
+# Retourne l'action qui a le plus de valeur en fonction de l'état dans lequel on se situe, à partir de la table Q
 def maxAction(Q, state, actions):
 
     values = np.array([Q[state,a] for a in actions])
@@ -138,7 +138,7 @@ def maxAction(Q, state, actions):
 
     return actions[action]
 
-
+# Jouer la partie aléatoirement
 def playGameRandomly():
     i = 0
     while gameManager.terminated == False:
@@ -149,41 +149,42 @@ def playGameRandomly():
     print('looser : ' + gameManager.round)
 
 
+# Fonction principale : Simulation du jeu du mutorere opposant 1 joueur effectuant des actions aléatoires et 1 joueur intelligent
 def playQLearningBlack(n):
+    iterationBeforeWin, evolutionWinrate, epsList = [], [], []
     whiteC, blackC = 0, 0
-    state_size = 86
-    action_size = 9
+    winrateQ = collections.deque(maxlen=1000)
 
 
-    #create Q learning table
+    # Création de la table de Q learning
     Q = {}
     possibleActions = [0, 1, 2, 3, 4, 5, 6, 7, 8]
 
     from more_itertools import distinct_permutations
 
+    # Initialisation de toutes les actions possible dans la Q table
     for p in distinct_permutations('111122223'):
         for action in possibleActions :
             Q[''.join(p), action] = 0
 
-    print(Q)
 
+    # Hyperparamètres
+    ALPHA = 0.15 # Learning Rate
+    GAMMA = 0.80 # discount factor
+    EPS = 1 # Epsilon
 
-
-
-    # model hyperparameters
-    ALPHA = 0.15 #Learning Rate
-    GAMMA = 0.80 #discount factor
-
-    EPS = 1
-
+    # On joue le nombre de game passé en paramètre de la fonction
     for gameNumber in range(n):
-        print(EPS)
         print('game :',gameNumber)
+        print('EPS :',EPS)
+        print('####')
+        
 
         gameManager.__init__()
         observation = gameManager.board
         observationInt = ''
-        a=0
+
+        # Changement de format de la situation du board en une chaîne de caractères pour pouvoir la passer en paramètres de la fonction maxAction
         for i in observation:
             if i == "black":
                 observationInt = str(observationInt)+str(1)
@@ -191,21 +192,24 @@ def playQLearningBlack(n):
                 observationInt = str(observationInt) + str(2)
             if i == "empty":
                 observationInt = str(observationInt)+str(3)
-            a = a+1
+
         iteration = 0
 
 
         while gameManager.terminated == False :
             iteration = iteration +1
-            rand = np.random.random()
-
-            if gameManager.round == "black" :
+            
+            # Tour du joueur noir (intelligent)
+            while gameManager.round == "black" :
                 #play with Q learning
+                rand = np.random.random()
+                # Détermination de l'action en fonction d'epsilon
                 action = maxAction(Q, observationInt, possibleActions) if rand < (1 - EPS) else gameManager.actionSpaceSample()
 
+                # Récupération de l'état du board après avoir effectué l'action
                 observation_, reward, done, info = gameManager.step(action)
+                # Etat futur du board par rapport à l'action passée
                 observation_Int = ''
-                a = 0
                 for i in observation:
                     if i == "black":
                         observation_Int = str(observation_Int) + str(1)
@@ -213,58 +217,92 @@ def playQLearningBlack(n):
                         observation_Int = str(observation_Int) + str(2)
                     if i == "empty":
                         observation_Int = str(observation_Int) + str(3)
-                    a = a + 1
-
-                action_ = maxAction(Q, observation_Int,possibleActions)
 
 
+                
+            # Tour du joueur blanc (aléatoire)
+            while gameManager.round == "white" and gameManager.terminated == False:
+
+                observation_, reward1, done, info = gameManager.step(gameManager.actionSpaceSample())
+
+                # Etat futur du board par rapport à l'action passée
+                observation_Int = ''
+                for i in observation_:
+                    if i == "black":
+                        observation_Int = str(observation_Int) + str(1)
+                    if i == "white":
+                        observation_Int = str(observation_Int) + str(2)
+                    if i == "empty":
+                        observation_Int = str(observation_Int) + str(3)
+
+                # affectation d'une reward négative si victoire du blanc
+                if(reward1 == 1000) :
+                    reward = -1000
 
 
+            action_ = maxAction(Q, observation_Int,possibleActions)
+            # Equation de Bellman
+            Q[observationInt, action] = Q[observationInt, action] + ALPHA * (reward + GAMMA * Q[observation_Int, action_] - Q[observationInt, action])
+            observationInt = observation_Int
 
+        # Création des graphes de représentation des résultats
 
-                Q[observationInt, action] = Q[observationInt, action] + ALPHA * (reward + GAMMA * Q[observation_Int, action_] - Q[observationInt, action])
-                observationInt = observation_Int
+        # Graphe de représentation du nombre d'itérations avant une victoire (pour les 2 joueurs)
+        if gameManager.round == "black":
+            iteration = -iteration 
+        iterationBeforeWin.append(iteration)
 
-            if gameManager.round == "white":
-                #play randomly
-                gameManager.step(gameManager.actionSpaceSample())
-
-        #print('looser : ' + gameManager.round)
-        #print('in ',iteration,' round')
-
-       # EPS = 1 / (gameNumber+1)
-       # print(EPS)
-
-        if gameNumber > 3000 :
-            EPS = 0.5
-
-        if gameNumber > 5000:
-            EPS = 0.3
-
-        if gameNumber > 7000:
-            EPS = 0.2
-
-        if gameNumber > 9000 :
+        # Graphe du taux de victoire du joueur intelligent (black)
+        if gameNumber > n/1.3 :
             EPS = 0
             if gameManager.round == "white" :
                 blackC = blackC + 1
             else :
                 whiteC = whiteC + 1
 
+        else :
+            EPS = 1 - gameNumber/(n/1.3)
+
+
+        if gameManager.round == "white" :
+                winrateQ.append(1)
+
+        else :
+                winrateQ.append(0)
+
+        if gameNumber> 9 :
+            evolutionWinrate.append(np.mean(winrateQ))
+            epsList.append(EPS)
+
+
+
+
 
     print('white win :', whiteC, 'black win :', blackC, '%for black :',blackC/(whiteC+blackC))
-    #print(Q)
+
+    plt.figure(1,figsize=(13,6))
+
+    plt.gcf().subplots_adjust(left = 0.1, bottom = 0.2, right = 0.98)
+    plt.subplot(1,2,1)
+    plt.bar(range(n), iterationBeforeWin, label="number of iterations before victory")
+    plt.title("Comparison of the number of moves played \n before a victory between black (positive values) and white (negative values)")
+    plt.xlabel("number of games")
+    plt.ylabel("number of moves played before victory")
+
+    plt.subplot(1,2,2)
+    plt.plot(range(n-10), evolutionWinrate,label="black winrate on last 1000 games")
+    plt.plot(range(n-10), epsList, label = "epsilon")
+    plt.title("Evolution of winrate and epsilon \n according to the number of games")
+    plt.legend(loc="lower left")
+    plt.xlabel("number of games")
+
+
+    plt.show()
+
 
 
 if __name__ == "__main__":
 
     gameManager = gameManager()
-
-    #playGameRandomly()
-    playQLearningBlack(10000)
-
-
-
-
-
-
+    # playGameRandomly()
+    playQLearningBlack(5000)
